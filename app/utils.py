@@ -212,19 +212,23 @@ class TaskNotifier:
             'smtp_server': "smtp.mailosaur.net",
             'login': os.getenv("USERNAME"),
             'password': os.getenv("PASSWORD"),
-            'sender_email': os.getenv("SENDER_MAIL"),
-            'receiver_email': os.getenv("RECEIVER_MAIL")
+            'sender_email': os.getenv("SENDER_MAIL")
         }
 
-    def send_notifications(self) -> List[Dict]:
+    def send_notifications(self, email) -> List[Dict]:
         """Send notifications for upcoming and overdue tasks"""
+
+        self.smtp_config.update({'receiver_email' : email})
         current_date = datetime.now()
         notification_window = current_date + timedelta(days=2)
 
         # Get tasks due soon
-        upcoming_tasks = self.db.query(models.TaskDB).filter(
+        upcoming_tasks = self.db.query(models.TaskDB)\
+        .join(models.User,models.TaskDB.owner_id == models.User.id)\
+        .filter(
             models.TaskDB.due_date <= notification_window,
-            models.TaskDB.status == "pending"
+            models.TaskDB.status == "pending",
+            models.User.email == email
         ).all()
 
         notifications = []

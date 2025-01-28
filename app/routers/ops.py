@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from typing import List, Dict
 import logging
 from fastapi.responses import StreamingResponse
-
+from oauth2 import get_current_user
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,11 +29,12 @@ def schedule_tasks(db: Session = Depends(get_db)):
         )
 
 @router.get("/notify", response_model=List[Dict])
-def send_task_notifications(db: Session = Depends(get_db)):
+def send_task_notifications(db: Session = Depends(get_db), 
+                            current_user : int = Depends(get_current_user)):
     """Send notifications for upcoming and overdue tasks"""
     try:
         notifier = TaskNotifier(db)
-        notifications = notifier.send_notifications()
+        notifications = notifier.send_notifications(current_user.email)
         return notifications
     except Exception as e:
         logger.error(f"Error sending notifications: {e}")

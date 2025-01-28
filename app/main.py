@@ -10,7 +10,6 @@ from routers import ops,user,task,auth
 models.Base.metadata.create_all(bind = engine)
 
 
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -23,7 +22,7 @@ async def lifespan(app: FastAPI):
     global notification_scheduler
     try:
         # db = SessionLocal()
-        # Create background scheduler for daily notifications
+
         notification_scheduler = BackgroundScheduler()
         
         def send_daily_notifications():
@@ -31,8 +30,7 @@ async def lifespan(app: FastAPI):
                 notifier = TaskNotifier(temp_db)
                 notifier.send_notifications()
         
-        # Schedule daily notification job
-        notification_scheduler.add_job(send_daily_notifications, 'interval', hours=24)
+        notification_scheduler.add_job(send_daily_notifications, 'interval', days = 1)
         notification_scheduler.start()
         
         logger.info("Background notification scheduler started successfully")
@@ -57,5 +55,3 @@ app.include_router(ops.router)
 app.include_router(task.router)
 app.include_router(user.router)
 app.include_router(auth.router)
-
-

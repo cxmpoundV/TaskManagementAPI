@@ -11,6 +11,8 @@ class TaskModel(BaseModel):
     completed_date: Optional[datetime] = None
     assigned_to: Union[str, None]
     priority: Optional[str] = "medium"
+    owner_id : int
+
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -31,12 +33,10 @@ class TaskCreate(BaseModel):
 
 
 class UpdateStatus(BaseModel):
-    task_id: int
     status: str
 
 
 class UpdateDueDate(BaseModel):
-    task_id: int
     due_date: datetime
 
 

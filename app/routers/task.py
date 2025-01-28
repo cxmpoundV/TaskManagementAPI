@@ -16,9 +16,11 @@ router = APIRouter(tags=["task"],prefix="/task")
 
 
 @router.get("/", response_model=List[TaskModel])
-async def get_tasks(db: Session = Depends(get_db),user_id : int = Depends(get_current_user)):
+def get_tasks(db: Session = Depends(get_db),
+              current_user : int = Depends(get_current_user)):
     try:
         tasks = db.query(models.TaskDB).all()
+        # print(current_user.email)
         return tasks
     except Exception as e:
         logger.error(f"Error fetching tasks: {e}")
@@ -29,9 +31,9 @@ async def get_tasks(db: Session = Depends(get_db),user_id : int = Depends(get_cu
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def create_task(task: TaskCreate, db: Session = Depends(get_db), user_id : int = Depends(get_current_user)):
+def create_task(task: TaskCreate, db: Session = Depends(get_db), current_user : int = Depends(get_current_user)):
     try:
-        new_task = models.TaskDB(**task.model_dump())
+        new_task = models.TaskDB(owner_id = current_user.id, **task.model_dump())
         db.add(new_task)
         db.commit()
         db.refresh(new_task)
@@ -45,7 +47,7 @@ def create_task(task: TaskCreate, db: Session = Depends(get_db), user_id : int =
         )
 
 @router.put("/{id}")
-def update_task(id : int, task : TaskModel, db : Session = Depends(get_db), user_id : int = Depends(get_current_user)):
+def update_task(id : int, task : TaskModel, db : Session = Depends(get_db), current_user : int = Depends(get_current_user)):
     
     query = db.query(models.TaskDB).filter(models.TaskDB.task_id == id)
 
@@ -64,7 +66,7 @@ def update_task(id : int, task : TaskModel, db : Session = Depends(get_db), user
 
 
 @router.delete("/{id}")
-def delete_task(id : int, db : Session = Depends(get_db),user_id : int = Depends(get_current_user)):
+def delete_task(id : int, db : Session = Depends(get_db),current_user : int = Depends(get_current_user)):
 
     task = db.query(models.TaskDB).filter(models.TaskDB.task_id == id)
 
@@ -79,32 +81,46 @@ def delete_task(id : int, db : Session = Depends(get_db),user_id : int = Depends
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.put("/update_task_status")
-def update_status(new_task : UpdateStatus, db : Session = Depends(get_db)):
-
+@router.put("/update_status/{task_id}")
+def update_status(
+    task_id: int,
+    status_update: UpdateStatus,
+    db: Session = Depends(get_db),
+    current_user: int = Depends(get_current_user)
+):
     taskutil = Taskutils(db)
-
-    new_task.task_id = int(new_task.task_id)
-
-    updated_task = taskutil.update_task_status(**new_task.model_dump())
-
+    
+    updated_task = taskutil.update_task_status(
+        task_id=task_id,
+        status=status_update.status
+    )
+    
     if updated_task is None:
-
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found"
+        )
+    
     return Response(status_code=status.HTTP_201_CREATED)
 
-@router.put("/update_task_due_date")
-def update_due_date(new_task : UpdateDueDate, db : Session = Depends(get_db)):
-
+@router.put("/update_task_due_date/{task_id}")
+def update_due_date(
+    task_id: int,
+    due_date_update: UpdateDueDate,
+    db: Session = Depends(get_db),
+    current_user: int = Depends(get_current_user)
+):
     taskutil = Taskutils(db)
-
-    new_task.task_id = int(new_task.task_id)
-
-    updated_task = taskutil.update_due_date(**new_task.model_dump())
-
+    
+    updated_task = taskutil.update_due_date(
+        task_id=task_id,
+        due_date=due_date_update.due_date
+    )
+    
     if updated_task is None:
-
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found"
+        )
+    
     return Response(status_code=status.HTTP_201_CREATED)

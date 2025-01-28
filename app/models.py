@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, LargeBinary
+from sqlalchemy import Column, Integer, String, DateTime, LargeBinary, ForeignKey
 from sqlalchemy.sql import text
 from database import Base
 from sqlalchemy.sql.sqltypes import TIMESTAMP
@@ -15,7 +15,7 @@ class TaskDB(Base):
     completed_date = Column(DateTime)
     assigned_to = Column(String,nullable=True)
     priority = Column(String,server_default='medium')
-
+    owner_id = Column(Integer,ForeignKey("users.id",ondelete="CASCADE"),nullable=False)
 
 
 class User(Base):
