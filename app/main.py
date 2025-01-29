@@ -18,7 +18,7 @@ notification_scheduler = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    
     global notification_scheduler
     try:
         # db = SessionLocal()

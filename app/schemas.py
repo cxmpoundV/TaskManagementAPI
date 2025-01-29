@@ -20,9 +20,9 @@ class TaskModel(BaseModel):
             datetime: lambda v: v.isoformat() if v else None
         }
     )
-
-    class ConfigDict:
-        from_attributes=True
+    
+    # class ConfigDict:
+    #     from_attributes=True
 
 
 class TaskCreate(BaseModel):
