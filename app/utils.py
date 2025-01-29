@@ -11,14 +11,10 @@ import pandas as pd
 from io import StringIO,BytesIO
 import bcrypt
 import matplotlib.pyplot as plt
-import logging 
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 def hash_password(password : str):
@@ -33,16 +29,46 @@ class Taskutils:
     def __init__(self,db : Session) :
         self.db = db
 
-    def update_task_status(self, task_id: int, status: str):
-        task = self.db.query(TaskDB).filter(TaskDB.task_id == task_id).first()
+    def handle_db_data(self):
+
+        """Replace NULL values in the database with default values."""
+
+        default_completed_date = datetime(9999, 12, 31, 0, 0, 0)
+        
+        self.db.query(TaskDB).filter(TaskDB.description.is_(None)).update(
+            {TaskDB.description: "No description"}, synchronize_session=False
+        )
+        self.db.query(TaskDB).filter(TaskDB.completed_date.is_(None)).update(
+            {TaskDB.completed_date: default_completed_date}, synchronize_session=False
+        )
+        self.db.query(TaskDB).filter(TaskDB.assigned_to.is_(None)).update(
+            {TaskDB.assigned_to: "Unassigned"}, synchronize_session=False
+        )
+        self.db.query(TaskDB).filter(TaskDB.priority.is_(None)).update(
+            {TaskDB.priority: "medium"}, synchronize_session=False
+        )
+
+        self.db.commit()
+
+
+    def update_task_status(self, task_id: int, owner_id : int, status: str):
+
+        "Update Task Status for a specific Task"
+
+        task = self.db.query(TaskDB).filter(TaskDB.task_id == task_id,
+                                            models.TaskDB.owner_id == owner_id).first()
         if task:
             task.status = status
             self.db.commit()
             return task
         return None
 
-    def update_due_date(self, task_id: int, due_date: str):
-        task = self.db.query(TaskDB).filter(TaskDB.task_id == task_id).first()
+    def update_due_date(self, task_id: int, owner_id : int, due_date: str):
+
+        "Update Task Due Date for a specific Task"
+
+        task = self.db.query(TaskDB).filter(TaskDB.task_id == task_id,
+                                            models.TaskDB.owner_id == owner_id).first()
         if task:
             task.due_date = due_date
             self.db.commit()
@@ -54,12 +80,10 @@ class TaskAnalytics:
         self.db = db
 
     def get_task_statistics(self, user_id: int) -> Dict:
-        """Calculate various task statistics for a specific user
+
+        "Calculate various task statistics for a specific user"
+
         
-        Args:
-            user_id: The ID of the user to get statistics for
-        """
-        # Update total tasks query to filter by user
         total_tasks = self.db.query(models.TaskDB).filter(
             models.TaskDB.owner_id == user_id
         ).count()
@@ -70,7 +94,6 @@ class TaskAnalytics:
             models.TaskDB.owner_id == user_id
         ).count()
         
-        # Update completed tasks query to filter by user
         completed_tasks = self.db.query(models.TaskDB).filter(
             models.TaskDB.status == "completed",
             models.TaskDB.completed_date.isnot(None),
@@ -196,27 +219,20 @@ class TaskAnalytics:
         # Save to buffer
         buffer = BytesIO()
         plt.savefig(buffer, format="png")
-        plt.close()  # Close the figure to free memory
+        plt.close()  
         buffer.seek(0)
         
         return buffer
-
-        
-        # status_counts = df["status"].value_counts()
-        # plt.figure(figsize=(8, 6))
-        # status_counts.plot.bar(title="Task Status Distribution")
-        # plt.xlabel("Status")
-        # plt.ylabel("Count")
-        # plt.savefig("task_status_chart.png")
-        # plt.close()
     
 class TaskScheduler:
     def __init__(self, db: Session):
         self.db = db
 
     def schedule_tasks(self) -> List[Dict]:
+
         """Schedule tasks based on priority and due dates"""
-        # Get all pending tasks
+
+        
         pending_tasks = self.db.query(models.TaskDB).filter(
             models.TaskDB.status == "pending"
         ).order_by(
@@ -228,7 +244,7 @@ class TaskScheduler:
         current_date = datetime.now()
 
         for task in pending_tasks:
-            # Calculate suggested start date based on priority
+            
             if task.priority == "high":
                 start_date = current_date
             elif task.priority == "medium":

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, status, HTTPException, Response
 from database import get_db
-from schemas import UserLogin, Token
+from schemas import Token
 from sqlalchemy.orm import Session
 from models import User
 from utils import verify

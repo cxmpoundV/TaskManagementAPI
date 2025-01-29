@@ -20,7 +20,7 @@ class TaskModel(BaseModel):
             datetime: lambda v: v.isoformat() if v else None
         }
     )
-    
+
     # class ConfigDict:
     #     from_attributes=True
 
@@ -35,8 +35,19 @@ class TaskCreate(BaseModel):
 class UpdateStatus(BaseModel):
     status: str
 
+class UpdateStatusResponse(BaseModel):
+    task_id : int
+    name: str
+    status: str
+
 
 class UpdateDueDate(BaseModel):
+    due_date: datetime
+
+
+class UpdateDueDateResponse(BaseModel):
+    task_id : int
+    name: str
     due_date: datetime
 
 
