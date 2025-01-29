@@ -44,11 +44,12 @@ def send_task_notifications(db: Session = Depends(get_db),
         )
 
 @router.get("/statistics", response_model=Dict)
-def get_task_statistics(db: Session = Depends(get_db)):
+def get_task_statistics(db: Session = Depends(get_db),
+                        current_user : int = Depends(get_current_user)):
     """Get task statistics and analytics"""
     try:
         analytics = TaskAnalytics(db)
-        statistics = analytics.get_task_statistics()
+        statistics = analytics.get_task_statistics(current_user.id)
         return statistics
     except Exception as e:
         logger.error(f"Error generating statistics: {e}")
@@ -58,11 +59,12 @@ def get_task_statistics(db: Session = Depends(get_db)):
         )
 
 @router.get("/report", response_model=Dict)
-def generate_task_report(db: Session = Depends(get_db)):
+def generate_task_report(db: Session = Depends(get_db),
+                         current_user : int = Depends(get_current_user)):
     """Generate detailed task analysis report"""
     try:
         analytics = TaskAnalytics(db)
-        report = analytics.generate_task_report()
+        report = analytics.generate_task_report(current_user.id)
         return report
     except Exception as e:
         logger.error(f"Error generating report: {e}")
@@ -71,13 +73,27 @@ def generate_task_report(db: Session = Depends(get_db)):
             detail="Failed to generate report"
         )
     
-@router.get("/download_csv")
-def download_csv(db: Session = Depends(get_db)):
+@router.get("/getcsv")
+def download_csv(db: Session = Depends(get_db),
+                current_user: int = Depends(get_current_user)):
+    """Download tasks as CSV file"""
     analytics = TaskAnalytics(db)
-    csv_buffer = analytics.export_tasks_to_csv()
+    _, csv_buffer = analytics.export_tasks_to_csv(current_user.id)
 
     return StreamingResponse(
         content=csv_buffer,
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=task_data.csv"}
+        headers={"Content-Disposition": "attachment; filename=tasks.csv"}
+    )
+
+@router.get("/getviz")
+def get_visualizations(db: Session = Depends(get_db),
+                      current_user: int = Depends(get_current_user)):
+    """Get task priority distribution visualization"""
+    analytics = TaskAnalytics(db)
+    buffer = analytics.generate_visualizations(current_user.id)
+
+    return StreamingResponse(
+        content=buffer, 
+        media_type="image/png"
     )

@@ -4,11 +4,11 @@ from models import TaskDB
 import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
-from typing import List, Dict
+from typing import List, Dict, Tuple
 import models
 from sqlalchemy import func
 import pandas as pd
-from io import StringIO
+from io import StringIO,BytesIO
 import bcrypt
 import matplotlib.pyplot as plt
 import logging 
@@ -53,18 +53,28 @@ class TaskAnalytics:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_task_statistics(self) -> Dict:
-        """Calculate various task statistics"""
-        total_tasks = self.db.query(models.TaskDB).count()
-        overdue_tasks = self.db.query(models.TaskDB).filter(
-            models.TaskDB.due_date < datetime.now(),
-            models.TaskDB.status != "completed"
+    def get_task_statistics(self, user_id: int) -> Dict:
+        """Calculate various task statistics for a specific user
+        
+        Args:
+            user_id: The ID of the user to get statistics for
+        """
+        # Update total tasks query to filter by user
+        total_tasks = self.db.query(models.TaskDB).filter(
+            models.TaskDB.owner_id == user_id
         ).count()
         
-        # Calculate average completion time
+        overdue_tasks = self.db.query(models.TaskDB).filter(
+            models.TaskDB.due_date < datetime.now(),
+            models.TaskDB.status != "completed",
+            models.TaskDB.owner_id == user_id
+        ).count()
+        
+        # Update completed tasks query to filter by user
         completed_tasks = self.db.query(models.TaskDB).filter(
             models.TaskDB.status == "completed",
-            models.TaskDB.completed_date.isnot(None)
+            models.TaskDB.completed_date.isnot(None),
+            models.TaskDB.owner_id == user_id
         ).all()
         
         total_completion_time = timedelta()
@@ -75,12 +85,13 @@ class TaskAnalytics:
         avg_completion_time = (total_completion_time / len(completed_tasks) if completed_tasks 
                              else timedelta())
 
-        # Tasks by priority
+        # Update priority distribution query to filter by user
         priority_distribution = dict(
             self.db.query(
                 models.TaskDB.priority,
                 func.count(models.TaskDB.task_id)
-            ).group_by(models.TaskDB.priority).all()
+            ).filter(models.TaskDB.owner_id == user_id)
+            .group_by(models.TaskDB.priority).all()
         )
 
         return {
@@ -90,10 +101,18 @@ class TaskAnalytics:
             "average_completion_time_days": avg_completion_time.days,
             "priority_distribution": priority_distribution
         }
-    def export_tasks_to_csv(self):
-        """Stream large task data as a CSV file."""
+    def export_tasks_to_csv(self, user_id: int) -> Tuple[pd.DataFrame, StringIO]:
+        """
+        Export tasks to CSV and return both DataFrame and CSV buffer
+        
+        Args:
+            user_id: The ID of the user whose tasks to export
+        
+        Returns:
+            Tuple containing (DataFrame, StringIO buffer with CSV data)
+        """
         # Fetch all tasks
-        tasks = self.db.query(models.TaskDB).all()
+        tasks = self.db.query(TaskDB).filter(TaskDB.owner_id == user_id).all()
 
         # Convert tasks to DataFrame
         task_data = [
@@ -105,36 +124,42 @@ class TaskAnalytics:
                 "due_date": task.due_date,
                 "completed_date": task.completed_date,
                 "assigned_to": task.assigned_to,
-                "priority": task.priority
+                "priority": task.priority,
+                "owner_id": task.owner_id
             }
             for task in tasks
         ]
         df = pd.DataFrame(task_data)
 
-        self.generate_visualizations(df)
-        logger.info("Generating Visualizations")
-
+        # Create CSV buffer
         buffer = StringIO()
         df.to_csv(buffer, index=False)
-        buffer.seek(0)  
-        return buffer
+        buffer.seek(0)
+        
+        return df, buffer
 
-    def generate_task_report(self) -> Dict:
-        """Generate detailed task analysis report"""
+    def generate_task_report(self, user_id: int) -> Dict:
+        """Generate detailed task analysis report for a specific user
+        
+        Args:
+            user_id: The ID of the user to generate the report for
+        """
         current_date = datetime.now()
         
         # Tasks due this week
         week_end = current_date + timedelta(days=7)
         upcoming_tasks = self.db.query(models.TaskDB).filter(
-            models.TaskDB.due_date.between(current_date, week_end)
+            models.TaskDB.due_date.between(current_date, week_end),
+            models.TaskDB.owner_id == user_id
         ).all()
 
-        # Tasks by status
+        # Tasks by status with user filtering
         status_counts = dict(
             self.db.query(
                 models.TaskDB.status,
                 func.count(models.TaskDB.task_id)
-            ).group_by(models.TaskDB.status).all()
+            ).filter(models.TaskDB.owner_id == user_id)
+            .group_by(models.TaskDB.status).all()
         )
 
         return {
@@ -146,27 +171,44 @@ class TaskAnalytics:
                 } for task in upcoming_tasks
             ],
             "status_distribution": status_counts,
-            "statistics": self.get_task_statistics()
+            "statistics": self.get_task_statistics(user_id)  # Pass user_id here
         }
     
-    def generate_visualizations(self, df: pd.DataFrame):
-        """Generate visualizations and save them as files."""
+    def generate_visualizations(self, user_id: int) -> BytesIO:
+        """
+        Generate visualizations of task data
         
+        Args:
+            user_id: The ID of the user whose tasks to visualize
+        
+        Returns:
+            BytesIO buffer containing the PNG image
+        """
+        # Get DataFrame directly without CSV conversion
+        df, _ = self.export_tasks_to_csv(user_id)
+
+        # Create visualization
         priority_counts = df["priority"].value_counts()
         plt.figure(figsize=(8, 6))
-        priority_counts.plot.pie(autopct="%1.1f%%", startangle=90, title="Task Priority Distribution")
-        plt.ylabel("")  
-        plt.savefig("priority_distribution.png")
-        plt.close()
+        plt.pie(priority_counts.values, labels=priority_counts.index, autopct="%1.1f%%", startangle=90)
+        plt.title("Task Priority Distribution")
+        
+        # Save to buffer
+        buffer = BytesIO()
+        plt.savefig(buffer, format="png")
+        plt.close()  # Close the figure to free memory
+        buffer.seek(0)
+        
+        return buffer
 
         
-        status_counts = df["status"].value_counts()
-        plt.figure(figsize=(8, 6))
-        status_counts.plot.bar(title="Task Status Distribution")
-        plt.xlabel("Status")
-        plt.ylabel("Count")
-        plt.savefig("task_status_chart.png")
-        plt.close()
+        # status_counts = df["status"].value_counts()
+        # plt.figure(figsize=(8, 6))
+        # status_counts.plot.bar(title="Task Status Distribution")
+        # plt.xlabel("Status")
+        # plt.ylabel("Count")
+        # plt.savefig("task_status_chart.png")
+        # plt.close()
     
 class TaskScheduler:
     def __init__(self, db: Session):
