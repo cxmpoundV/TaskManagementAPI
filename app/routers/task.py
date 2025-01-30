@@ -8,6 +8,7 @@ from typing import List
 import logging
 import models
 from oauth2 import get_current_user
+from notify import push_notifications
 
 
 logging.basicConfig(level=logging.INFO)
@@ -25,6 +26,8 @@ def get_tasks(db: Session = Depends(get_db),
         fill_na_func.handle_db_data()
 
         tasks = db.query(models.TaskDB).filter(models.TaskDB.owner_id == current_user.id).all()
+
+        push_notifications(current_user.email, "fetch-tasks", {"message" : "Fetched Tasked Successfully."})
 
         return tasks
     except Exception as e:

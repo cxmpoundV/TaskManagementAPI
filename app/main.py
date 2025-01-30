@@ -5,7 +5,7 @@ import models
 from apscheduler.schedulers.background import BackgroundScheduler
 import logging
 from contextlib import asynccontextmanager
-from routers import ops,user,task,auth
+from routers import ops,user,auth,task
 
 models.Base.metadata.create_all(bind = engine)
 
@@ -18,7 +18,7 @@ notification_scheduler = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    
+
     global notification_scheduler
     try:
         # db = SessionLocal()
